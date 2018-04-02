@@ -11,7 +11,20 @@
 	<link rel="stylesheet" href="leaflet.css">
 </head>
 <body ondrop="dropHandler(event);" ondragover="dragOverHandler(event);">
+	<div class="modal" id="modal-loading">
+		<div class="modal-content">
+			<span class="close" onclick="document.getElementById('modal-loading').style.display='none';">&times;</span>
+			<span id="modal-text">test</span>
+		</div>
+	</div>
 	<div id="header">Genealogy map</div>
+	<div id="missing-places-button">Places</div>
 	<div class="heatmap" id="map-canvas"></div>
+	<div class"missingplaces" id="missing-places" style="display: none;"></div>
+	<div class="slidecontainer">
+		<input type="range" min="1" max="1" value="1" class="slider" id="dateStart">
+		<input type="range" min="1" max="1" value="1" class="slider" id="dateRange">
+		<span id="date-text"></span>
+	</div>
 </body>
 </html>
