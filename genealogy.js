@@ -206,7 +206,7 @@ function requestPlaces() {
 	for (var p in Genealogy.Persons) {
 		for (var e in Genealogy.Persons[p].events) {
 			var event = Genealogy.Persons[p].events[e];
-			if (event.type.localeCompare("birth") == 0 && event.place != null && !places.includes(event.place)) {
+			if (event.place != null && !places.includes(event.place)) {
 				places.push(event.place);
 			}
 		}
@@ -252,7 +252,8 @@ function receivedPlacesCallback() {
 				if (eventDate < Genealogy.minimumYear) Genealogy.minimumYear = eventDate;
 			}
 
-			if (event.place != null && !missingPlaces.includes(event.place)) {
+			if (event.place != null && !missingPlaces.includes(event.place) && Genealogy.places[event.place] == null) {
+				console.log(event.place + " - " + Genealogy.places[event.place]);
 				missingPlaces.push(event.place);
 			}
 		}
@@ -261,14 +262,17 @@ function receivedPlacesCallback() {
 	document.getElementById("dateStart").min = Genealogy.minimumYear;
 	document.getElementById("dateStart").max = Genealogy.maximumYear;
 	document.getElementById("dateRange").max = Genealogy.maximumYear - Genealogy.minimumYear;
+	document.getElementById("dateRange").value = document.getElementById("dateRange").max;
 
 	console.log(missingPlaces.length + " missing places.");
 
+	var str = "";
 	for (var place of missingPlaces) {
-		//document.getElementById("missing-places").innerHTML += place + "<br>";
+		str += place + "<br>";
 	}
+	document.getElementById("missing-places").innerHTML = str;
 
-	updateLayers(0, 10000);
+	onSliderUpdate();
 }
 
 function updateLayers(startYear, endYear) {
@@ -281,7 +285,6 @@ function updateLayers(startYear, endYear) {
 		for (var event of person.events) {
 			// Update map lists
 			if (event.date == null || (person.getEventDate(event) >= startYear && person.getEventDate(event) <= endYear)) {
-				console.log(startYear + "<" + person.getEventDate(event) + ">" + endYear);
 				if (event.place != null && Genealogy.places[event.place] != null) {
 					if (event.type.localeCompare("birth") == 0) {
 						Genealogy.birthMarkers.push(L.marker([
@@ -341,7 +344,7 @@ function onSliderUpdate() {
 	if (date + range > Genealogy.maximumYear) range = Genealogy.maximumYear - date;
 
 	updateLayers(date, date + range);
-	document.getElementById("date-text").innerHTML = "Anno " + date + " to " + (date + range) + " (" + range + " year span)";
+	document.getElementById("date-text").innerHTML = "Anno " + date + " to " + (date + range) + " (" + range + " years)";
 }
 
 $(document).ready(function () {
@@ -368,7 +371,15 @@ $(document).ready(function () {
 		onSliderUpdate();
 	}
 
+	document.getElementById("dateStart").oninput = function() {
+		onSliderUpdate();
+	}
+
 	document.getElementById("dateRange").onchange = function() {
+		onSliderUpdate();
+	}
+
+	document.getElementById("dateRange").oninput = function() {
 		onSliderUpdate();
 	}
 });
