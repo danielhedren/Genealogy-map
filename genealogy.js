@@ -212,8 +212,6 @@ function requestPlaces() {
 		}
 	}
 
-	console.log(places.length);
-
 	var xmlHttp = new XMLHttpRequest();
 	xmlHttp.onreadystatechange = function() { 
 		if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
@@ -225,9 +223,15 @@ function requestPlaces() {
 			} catch (e) {
 				return;
 			}
+
+			if (jsonResponse.queue_done >= jsonResponse.queue_target) {
+				setTimeout(function() {
+					queuePoller(jsonResponse.queue_target)
+				}, 1000);
+			}
 			
-			for (var location in jsonResponse) {
-				Genealogy.places[jsonResponse[location].address] = [Number(jsonResponse[location].latitude), Number(jsonResponse[location].longitude)];
+			for (var location in jsonResponse.data) {
+				Genealogy.places[jsonResponse.data[location].address] = [Number(jsonResponse.data[location].latitude), Number(jsonResponse.data[location].longitude)];
 			}
 
 			receivedPlacesCallback();
@@ -236,6 +240,34 @@ function requestPlaces() {
 	xmlHttp.open("POST", "http://" + Genealogy.apiUri + "/geocodepost", true); // true for asynchronous
 	xmlHttp.setRequestHeader("Content-Type", "application/json");
 	xmlHttp.send(JSON.stringify(places));
+}
+
+function queuePoller(queue_target) {
+	var xmlHttp = new XMLHttpRequest();
+	xmlHttp.onreadystatechange = function() { 
+		if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+			var jsonResponse;
+
+			// Break if response is unparseable
+			try {
+				jsonResponse = JSON.parse(xmlHttp.response);
+			} catch (e) {
+				return;
+			}
+
+			printInfo("Fetching additional places (" + (queue_target - jsonResponse.queue_done) + " remaining)")
+			if (jsonResponse.queue_done < queue_target) {
+				setTimeout(function() {
+					queuePoller(queue_target)
+				}, 1000);
+			} else {
+				printInfo("Reloading data")
+				requestPlaces()
+			}
+		}
+	}
+	xmlHttp.open("GET", "http://" + Genealogy.apiUri + "/queue_status", true); // true for asynchronous
+	xmlHttp.send();
 }
 
 function receivedPlacesCallback() {
@@ -253,7 +285,6 @@ function receivedPlacesCallback() {
 			}
 
 			if (event.place != null && !missingPlaces.includes(event.place) && Genealogy.places[event.place] == null) {
-				console.log(event.place + " - " + Genealogy.places[event.place]);
 				missingPlaces.push(event.place);
 			}
 		}
@@ -264,7 +295,8 @@ function receivedPlacesCallback() {
 	document.getElementById("dateRange").max = Genealogy.maximumYear - Genealogy.minimumYear;
 	document.getElementById("dateRange").value = document.getElementById("dateRange").max;
 
-	console.log(missingPlaces.length + " missing places.");
+
+	printInfo(missingPlaces.length + " missing places.");
 
 	var str = "";
 	for (var place of missingPlaces) {
@@ -324,8 +356,12 @@ function updateLayers(startYear, endYear) {
 }
 
 //--------------------------------------------------
-// Map
+// UI
 //--------------------------------------------------
+
+function printInfo(text) {
+	document.getElementById("info-span").innerHTML = text + "<br>" + document.getElementById("info-span").innerHTML;
+}
 
 function toggleSidebar() {
 	if (document.getElementById("missing-places").style.display.localeCompare("none") == 0) {
@@ -363,7 +399,7 @@ $(document).ready(function () {
 	}).addTo(Genealogy.map);
 
 	Genealogy.map.on("contextmenu", function (event) {
-		console.log("Coordinates: " + event.latlng.toString());
+		printInfo("Coordinates: " + event.latlng.toString());
 		toggleSidebar();
 	});
 
