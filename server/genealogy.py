@@ -25,7 +25,7 @@ def process_queue():
     db = sqlite3.connect("database.s3db")
     while not queueProcessEvent.is_set():
         address = geocode_queue.get()
-
+        
         try:
             response = urllib.request.urlopen("https://maps.googleapis.com/maps/api/geocode/json?address=" + urllib.parse.quote_plus(address) + "&key=" + config.gmaps_api_key)
         except urllib.error.HTTPError:

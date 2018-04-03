@@ -38,7 +38,7 @@ var Genealogy = {
 	Persons: [],
 	minimumYear: 0,
 	maximumYear: 0,
-	apiUri: "83.209.55.192:8001"
+	apiUri: "home.danielhedren.com:8001"
 }
 Genealogy.heatmapLayer = new HeatmapOverlay(Genealogy.heatmapCfg)
 
