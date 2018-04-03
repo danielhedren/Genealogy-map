@@ -21,10 +21,6 @@ queueProcessEvent = threading.Event()
 queueProcessLock = threading.Lock()
 geocode_result_queue = queue.Queue()
 
-for i in range(0, 4):
-    threading.Thread(target=process_queue, daemon=True).start()
-    threading.Thread(target=process_queue_results, daemon=True).start()
-
 def process_queue():
     db = sqlite3.connect("database.s3db")
     while not queueProcessEvent.is_set():
@@ -77,6 +73,9 @@ def process_queue_results():
 
         geocode_result_queue.task_done()
 
+for i in range(0, 4):
+    threading.Thread(target=process_queue, daemon=True).start()
+    threading.Thread(target=process_queue_results, daemon=True).start()
 
 class GeocodePost(Resource):
     def get(self):
