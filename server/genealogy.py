@@ -10,7 +10,6 @@ import queue
 import threading
 import time
 
-#e = create_engine('sqlite:///database.s3db')
 db = sqlite3.connect("database.s3db")
 
 app = Flask(__name__)
@@ -21,6 +20,11 @@ geocode_queue_done = 0
 queueProcessEvent = threading.Event()
 queueProcessLock = threading.Lock()
 geocode_result_queue = queue.Queue()
+
+for i in range(0, 4):
+    threading.Thread(target=process_queue, daemon=True).start()
+    threading.Thread(target=process_queue_results, daemon=True).start()
+
 def process_queue():
     db = sqlite3.connect("database.s3db")
     while not queueProcessEvent.is_set():
@@ -112,9 +116,9 @@ class QueueStatus(Resource):
     def get(self):
         return jsonify({"queue_size": geocode_queue.qsize(), "queue_done": geocode_queue_done})
 
-api.add_resource(Geocode, '/geocode/<string:address>')
-api.add_resource(GeocodePost, '/geocodepost')
-api.add_resource(QueueStatus, '/queue_status')
+api.add_resource(Geocode, '/api/geocode/<string:address>')
+api.add_resource(GeocodePost, '/api/geocodepost')
+api.add_resource(QueueStatus, '/api/queue_status')
 
 @app.after_request
 def after_request(response):
@@ -124,9 +128,4 @@ def after_request(response):
     return response
 
 if __name__ == '__main__':
-    #app.run()
-    for i in range(0, 4):
-        threading.Thread(target=process_queue, daemon=True).start()
-    threading.Thread(target=process_queue_results, daemon=True).start()
-
-    app.run(host="0.0.0.0", port=8001)
+    app.run()
