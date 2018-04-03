@@ -62,7 +62,6 @@ def process_queue_results():
             geocode_queue.put(address)
         elif (json_data["status"] == "OVER_QUERY_LIMIT"):
             # Kill the threads
-            print("OVER_QUERY_LIMIT")
             queueProcessEvent.set()
         elif (json_data["status"] == "INVALID_REQUEST"):
             # Skip the bad value
@@ -73,9 +72,10 @@ def process_queue_results():
 
         geocode_result_queue.task_done()
 
-for i in range(0, 4):
+for i in range(0, 1):
     threading.Thread(target=process_queue, daemon=True).start()
-    threading.Thread(target=process_queue_results, daemon=True).start()
+
+threading.Thread(target=process_queue_results, daemon=True).start()
 
 class GeocodePost(Resource):
     def get(self):
