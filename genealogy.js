@@ -134,6 +134,7 @@ function removeDragData(ev) {
 //--------------------------------------------------
 
 function parseGED(string) {
+	Genealogy.Persons = []
 	var lines = string.split('\r\n');
 	var dates = [];
 	var places = [];
@@ -195,6 +196,7 @@ function parseGED(string) {
 		}
 	}
 
+	Genealogy.reloaded = false;
 	requestPlaces();
 }
 
@@ -213,10 +215,8 @@ function requestPlaces() {
 		}
 	}
 
-	Genealogy.reloaded = false;
-
 	var xmlHttp = new XMLHttpRequest();
-	xmlHttp.onreadystatechange = function() { 
+	xmlHttp.onreadystatechange = function() {
 		if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
 			var jsonResponse;
 
@@ -227,7 +227,7 @@ function requestPlaces() {
 				return;
 			}
 
-			if (jsonResponse.queue_done < jsonResponse.queue_target) {
+			if (!Genealogy.reloaded && jsonResponse.queue_current != -1 && jsonResponse.queue_current < jsonResponse.queue_target) {
 				setTimeout(function() {
 					queuePoller(jsonResponse.queue_target)
 				}, 1000);
@@ -258,8 +258,8 @@ function queuePoller(queue_target) {
 				return;
 			}
 
-			printInfo("Fetching additional places (" + (queue_target - jsonResponse.queue_done) + " remaining)")
-			if (jsonResponse.queue_done < queue_target) {
+			if (jsonResponse.queue_current != -1 && jsonResponse.queue_current < queue_target) {
+				printInfo("Fetching additional places (" + (queue_target - jsonResponse.queue_current) + " remaining)");
 				setTimeout(function() {
 					queuePoller(queue_target)
 				}, 1000);
@@ -300,7 +300,6 @@ function receivedPlacesCallback() {
 	document.getElementById("dateStart").max = Genealogy.maximumYear;
 	document.getElementById("dateRange").max = Genealogy.maximumYear - Genealogy.minimumYear;
 	document.getElementById("dateRange").value = document.getElementById("dateRange").max;
-
 
 	printInfo(missingPlaces.length + " missing places.");
 
