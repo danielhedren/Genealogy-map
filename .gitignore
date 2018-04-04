@@ -7,3 +7,4 @@ server/__pycache__
 server/*.log
 server/*.sh
 server/venv
+*.ged
