@@ -30,18 +30,13 @@ class GeocodePost(Resource):
         json_data = request.get_json(force=True)
         with db.cursor() as cur:
             locations_list = []
-            queue_list = []
+            queue_list = json_data
 
-            for address in json_data:
-                if address == "":
-                    continue
-
-                cur.execute("SELECT latitude, longitude, valid FROM geocodes WHERE address=%s LIMIT 1;", (address,))
-                result = cur.fetchone()
-                if result == None:
-                        queue_list.append(address)
-                elif result[2] == True:
-                    locations_list.append({"address":address, "latitude":result[0], "longitude":result[1]})
+            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE address in %s;", (tuple(json_data),))
+            for result in cur:
+                queue_list.remove(result[0])
+                if result[3] == True:
+                    locations_list.append({"address":result[0], "latitude":result[1], "longitude":result[2]})
             
             logging.debug("Inserting into pending")
 
