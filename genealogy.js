@@ -38,6 +38,7 @@ var Genealogy = {
 	Persons: [],
 	minimumYear: 0,
 	maximumYear: 0,
+	reloaded: false,
 	apiUri: "genealogy.danielhedren.com/api"
 }
 Genealogy.heatmapLayer = new HeatmapOverlay(Genealogy.heatmapCfg)
@@ -212,6 +213,8 @@ function requestPlaces() {
 		}
 	}
 
+	Genealogy.reloaded = false;
+
 	var xmlHttp = new XMLHttpRequest();
 	xmlHttp.onreadystatechange = function() { 
 		if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
@@ -224,7 +227,7 @@ function requestPlaces() {
 				return;
 			}
 
-			if (jsonResponse.queue_done >= jsonResponse.queue_target) {
+			if (jsonResponse.queue_done < jsonResponse.queue_target) {
 				setTimeout(function() {
 					queuePoller(jsonResponse.queue_target)
 				}, 1000);
@@ -261,8 +264,11 @@ function queuePoller(queue_target) {
 					queuePoller(queue_target)
 				}, 1000);
 			} else {
-				printInfo("Reloading data")
-				requestPlaces()
+				if (!Genealogy.reloaded) {
+					Genealogy.reloaded = true;
+					printInfo("Reloading data")
+					requestPlaces()
+				}
 			}
 		}
 	}

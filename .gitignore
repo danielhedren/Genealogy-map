@@ -4,3 +4,6 @@ images/
 server/database.s3db
 server/config.py
 server/__pycache__
+server/*.log
+server/*.sh
+server/venv
