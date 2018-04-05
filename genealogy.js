@@ -39,6 +39,9 @@ var Genealogy = {
 	minimumYear: 0,
 	maximumYear: 0,
 	reloaded: false,
+	pickingAddress: null,
+	currentStartYear: 0,
+	currentEndYear: 0,
 	apiUri: "api"
 }
 Genealogy.heatmapLayer = new HeatmapOverlay(Genealogy.heatmapCfg)
@@ -204,8 +207,23 @@ function parseGED(string) {
 // Data handling
 //--------------------------------------------------
 
+function encodeString(string) {
+	string = encodeURI(string)
+	string = string.replace("'", "%AAA");
+	string = string.replace('"', "%AAB");
+	return string;
+}
+
+function decodeString(string) {
+	string = string.replace("%AAA", "'");
+	string = string.replace("%AAB", '"');
+	string = decodeURI(string)
+	return string
+}
+
 function requestPlaces() {
 	var places = [];
+
 	for (var p in Genealogy.Persons) {
 		for (var e in Genealogy.Persons[p].events) {
 			var event = Genealogy.Persons[p].events[e];
@@ -277,10 +295,10 @@ function queuePoller(queue_target) {
 }
 
 function receivedPlacesCallback() {
-	var missingPlaces = [];
-
 	Genealogy.minimumYear = 10000;
 	Genealogy.maximumYear = -1;
+
+	var missingPlaces = [];
 
 	for (var person of Genealogy.Persons) {
 		for (var event of person.events) {
@@ -305,14 +323,27 @@ function receivedPlacesCallback() {
 
 	var str = "";
 	for (var place of missingPlaces) {
-		str += place + "<br>";
+		str += "<tr><td>" + place + "</td><td><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Pick on map</a></td></tr>";
 	}
-	document.getElementById("missing-places").innerHTML = str;
+	document.getElementById("places-table-tbody").innerHTML = str;
 
 	onSliderUpdate();
 }
 
+function pickMissingPlace(address) {
+	document.getElementById("places-tab").style.display = "none";
+	document.getElementById("map-tab").style.display = "block";
+	document.getElementById("map-tab-button").className += " active";
+	document.getElementById("places-tab-button").className = "tab-btn";
+
+	Genealogy.pickingAddress = decodeString(address);
+	printInfo("Right click on the map to set the location of " + decodeString(address));
+}
+
 function updateLayers(startYear, endYear) {
+	Genealogy.currentStartYear = startYear;
+	Genealogy.currentEndYear = endYear;
+
 	Genealogy.heatmapData.data = [];
 	Genealogy.birthMarkers = [];
 	Genealogy.residenceMarkers = [];
@@ -327,21 +358,28 @@ function updateLayers(startYear, endYear) {
 						Genealogy.birthMarkers.push(L.marker([
 							Genealogy.places[event.place][0],
 							Genealogy.places[event.place][1]
-						]).bindPopup(person.getEventText(event)));
+						]).bindPopup(person.getEventText(event)
+						+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
+					));
 
 						Genealogy.heatmapData.data.push({lat: Genealogy.places[event.place][0], lng: Genealogy.places[event.place][1], count: 1})
 					} else if (event.type.localeCompare("death") == 0) {
 						Genealogy.deathMarkers.push(L.marker([
 							Genealogy.places[event.place][0],
 							Genealogy.places[event.place][1]
-						]).bindPopup(person.getEventText(event)));
+						]).bindPopup(person.getEventText(event)
+						+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
+					));
 
 						Genealogy.heatmapData.data.push({lat: Genealogy.places[event.place][0], lng: Genealogy.places[event.place][1], count: 1})
 					} else if (event.type.localeCompare("residence") == 0) {
 						Genealogy.residenceMarkers.push(L.marker([
 							Genealogy.places[event.place][0],
 							Genealogy.places[event.place][1]
-						]).bindPopup(person.getEventText(event)));
+						]).bindPopup(person.getEventText(event)
+						+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
+					));
+
 					}
 				}
 			}
@@ -371,7 +409,7 @@ function printInfo(text) {
 function toggleSidebar() {
 	if (document.getElementById("missing-places").style.display.localeCompare("none") == 0) {
 		document.getElementById("missing-places").style.display = "block";
-		document.getElementById("map-canvas").style.width = "calc(100% - 310px)"
+		document.getElementById("map-canvas").style.width = "calc(80vw - 10px)"
 	} else {
 		document.getElementById("missing-places").style.display = "none";
 		document.getElementById("map-canvas").style.width = "100%"
@@ -404,8 +442,11 @@ $(document).ready(function () {
 	}).addTo(Genealogy.map);
 
 	Genealogy.map.on("contextmenu", function (event) {
-		printInfo("Coordinates: " + event.latlng.toString());
-		toggleSidebar();
+		if (Genealogy.pickingAddress == null) return;
+		Genealogy.places[Genealogy.pickingAddress] = [event.latlng.lat, event.latlng.lng];
+		Genealogy.pickingAddress = null;
+		printInfo("Location set");
+		updateLayers(Genealogy.currentStartYear, Genealogy.currentEndYear);
 	});
 
 	document.getElementById("dateStart").onchange = function() {
@@ -422,5 +463,19 @@ $(document).ready(function () {
 
 	document.getElementById("dateRange").oninput = function() {
 		onSliderUpdate();
+	}
+
+	document.getElementById("places-tab-button").onclick = function() {
+		document.getElementById("places-tab").style.display = "block";
+		document.getElementById("map-tab").style.display = "none";
+		document.getElementById("map-tab-button").className = "tab-btn";
+		document.getElementById("places-tab-button").className += " active";
+	}
+
+	document.getElementById("map-tab-button").onclick = function() {
+		document.getElementById("places-tab").style.display = "none";
+		document.getElementById("map-tab").style.display = "block";
+		document.getElementById("map-tab-button").className += " active";
+		document.getElementById("places-tab-button").className = "tab-btn";
 	}
 });
