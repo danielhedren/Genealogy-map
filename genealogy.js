@@ -39,7 +39,7 @@ var Genealogy = {
 	minimumYear: 0,
 	maximumYear: 0,
 	reloaded: false,
-	apiUri: "genealogy.danielhedren.com/api"
+	apiUri: "api"
 }
 Genealogy.heatmapLayer = new HeatmapOverlay(Genealogy.heatmapCfg)
 
@@ -240,7 +240,7 @@ function requestPlaces() {
 			receivedPlacesCallback();
 		}
 	}
-	xmlHttp.open("POST", "http://" + Genealogy.apiUri + "/geocodepost", true); // true for asynchronous
+	xmlHttp.open("POST", Genealogy.apiUri + "/geocodepost", true); // true for asynchronous
 	xmlHttp.setRequestHeader("Content-Type", "application/json");
 	xmlHttp.send(JSON.stringify(places));
 }
@@ -272,7 +272,7 @@ function queuePoller(queue_target) {
 			}
 		}
 	}
-	xmlHttp.open("GET", "http://" + Genealogy.apiUri + "/queue_status", true); // true for asynchronous
+	xmlHttp.open("GET", Genealogy.apiUri + "/queue_status", true); // true for asynchronous
 	xmlHttp.send();
 }
 

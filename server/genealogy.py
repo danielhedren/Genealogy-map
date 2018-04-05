@@ -15,8 +15,8 @@ logging.debug("Log started")
 db = psycopg2.connect(config.postgres_connection_string)
 
 with db.cursor() as cur:
-    cur.execute("CREATE TABLE IF NOT EXISTS geocodes (address VARCHAR(100) PRIMARY KEY, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(50));")
-    cur.execute("CREATE TABLE IF NOT EXISTS geocodes_pending (id BIGSERIAL PRIMARY KEY, address VARCHAR(100) UNIQUE, status SMALLINT);")
+    cur.execute("CREATE TABLE IF NOT EXISTS geocodes (address TEXT PRIMARY KEY, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(50));")
+    cur.execute("CREATE TABLE IF NOT EXISTS geocodes_pending (id BIGSERIAL PRIMARY KEY, address TEXT UNIQUE, status SMALLINT);")
     db.commit()
 
 app = Flask(__name__)
