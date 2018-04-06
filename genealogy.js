@@ -323,7 +323,7 @@ function receivedPlacesCallback() {
 
 	var str = "";
 	for (var place of missingPlaces) {
-		str += "<tr><td>" + place + "</td><td><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Pick on map</a></td></tr>";
+		str += "<tr id=\'" + encodeString(place) + "\'><td>" + place + "</td><td><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Pick on map</a></td></tr>";
 	}
 	document.getElementById("places-table-tbody").innerHTML = str;
 
@@ -335,6 +335,9 @@ function pickMissingPlace(address) {
 	document.getElementById("map-tab").style.display = "block";
 	document.getElementById("map-tab-button").className += " active";
 	document.getElementById("places-tab-button").className = "tab-btn";
+
+	var tr = document.getElementById(address);
+	if (tr != null) tr.style.backgroundColor = "var(--accolor)";
 
 	Genealogy.pickingAddress = decodeString(address);
 	printInfo("Right click on the map to set the location of " + decodeString(address));
@@ -444,6 +447,12 @@ $(document).ready(function () {
 	Genealogy.map.on("contextmenu", function (event) {
 		if (Genealogy.pickingAddress == null) return;
 		Genealogy.places[Genealogy.pickingAddress] = [event.latlng.lat, event.latlng.lng];
+
+		var xmlHttp = new XMLHttpRequest();
+		xmlHttp.open("POST", Genealogy.apiUri + "/geocode_insert", true); // true for asynchronous
+		xmlHttp.setRequestHeader("Content-Type", "application/json");
+		xmlHttp.send(JSON.stringify({"address": Genealogy.pickingAddress, "latitude": event.latlng.lat, "longitude": event.latlng.lng}));
+
 		Genealogy.pickingAddress = null;
 		printInfo("Location set");
 		updateLayers(Genealogy.currentStartYear, Genealogy.currentEndYear);

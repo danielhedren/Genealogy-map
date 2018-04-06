@@ -44,6 +44,7 @@ def process_queue():
             if (json_data["status"] == "OK"):
                 values = [result[1],json_data["results"][0]["geometry"]["location"]["lat"], json_data["results"][0]["geometry"]["location"]["lng"], True, "google"]
                 cur = db.cursor()
+                # TODO: Change to update instead of do nothing
                 cur.execute("INSERT INTO geocodes (address, latitude, longitude, valid, source) VALUES (%s, %s, %s, %s, %s) ON CONFLICT DO NOTHING;", values)
                 db.commit()
             elif (json_data["status"] == "ZERO_RESULTS"):
@@ -53,11 +54,13 @@ def process_queue():
                 db.commit()
             elif (json_data["status"] == "UNKNOWN_ERROR"):
                 # Reset query status on unknown error
+                cur = db.cursor()
                 cur.execute("UPDATE geocodes_pending SET status=0 WHERE id=%s;", (result[0],))
                 db.commit()
                 continue
             elif (json_data["status"] == "OVER_QUERY_LIMIT"):
                 # Reset query status and set flag
+                cur = db.cursor()
                 cur.execute("UPDATE geocodes_pending SET status=0 WHERE id=%s;", (result[0],))
                 db.commit()
                 _query_limit_flag.set()
