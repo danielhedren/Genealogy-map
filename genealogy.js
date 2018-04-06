@@ -276,12 +276,15 @@ function queuePoller(queue_target) {
 				return;
 			}
 
-			if (jsonResponse.queue_current != -1 && jsonResponse.queue_current < queue_target) {
+			if (jsonResponse.status.localeCompare("OK") == 0 && jsonResponse.queue_current != -1 && jsonResponse.queue_current < queue_target) {
 				printInfo("Fetching additional places (" + (queue_target - jsonResponse.queue_current) + " remaining)");
 				setTimeout(function() {
 					queuePoller(queue_target)
 				}, 1000);
 			} else {
+				if (jsonResponse.status.localeCompare("OK") != 0) {
+					printInfo("Place fetching status: " + jsonResponse.status)
+				}
 				if (!Genealogy.reloaded) {
 					Genealogy.reloaded = true;
 					printInfo("Reloading data")

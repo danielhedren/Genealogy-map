@@ -93,7 +93,12 @@ class QueueStatus(Resource):
             else:
                 queue_current = -1
             
-        return jsonify({"queue_current": queue_current})
+            status = "OK"
+            cur.execute("SELECT id FROM geocodes_pending WHERE address='OVER_QUERY_LIMIT' AND status=-1 LIMIT 1;")
+            if cur.rowcount == 1:
+                status = "OVER_QUERY_LIMIT"
+            
+        return jsonify({"queue_current": queue_current, "status": status})
 
 class GeocodeInsert(Resource):
     def post(self):

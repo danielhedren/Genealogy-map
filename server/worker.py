@@ -1,5 +1,5 @@
 import config
-import psycopg2, time, logging, json, threading, signal, sys
+import psycopg2, time, logging, json, threading, signal, sys, datetime
 from urllib import request, error, parse
 
 logging.basicConfig(level=logging.DEBUG)
@@ -15,9 +15,24 @@ def process_queue():
     global _query_limit_flag
 
     while not _exit_flag.is_set():
-        if _query_limit_flag.is_set():
-            # If query limit is hit, retry once every hour
-            time.sleep(60 * 60)
+        while _query_limit_flag.is_set():
+            # Still let the threads exit gracefully
+            time.sleep(5)
+
+            if _exit_flag.is_set():
+                with db.cursor() as cur:
+                    cur.execute("DELETE FROM geocodes_pending WHERE status=-1;")
+                    db.commit()
+                return
+
+            # Google geocoding api quota resets at midnight pacific time which is UTC-8 or UTC-7 depending on DST
+            # To avoid that headache, just use -8. Retry 15 minutes after midnight.
+            if (datetime.datetime.utcnow() - datetime.timedelta(hours=8, minutes=15)).hour == 0:
+                logging.debug("Retrying query quota")
+                _query_limit_flag.clear()
+                with db.cursor() as cur:
+                    cur.execute("DELETE FROM geocodes_pending WHERE status=-1;")
+                    db.commit()
 
         with db.cursor() as cur:
             cur.execute("SELECT * FROM geocodes_pending WHERE status=0 ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED;")
@@ -60,8 +75,10 @@ def process_queue():
                 continue
             elif (json_data["status"] == "OVER_QUERY_LIMIT"):
                 # Reset query status and set flag
+                logging.debug("OVER_QUERY_LIMIT")
                 cur = db.cursor()
                 cur.execute("UPDATE geocodes_pending SET status=0 WHERE id=%s;", (result[0],))
+                cur.execute("INSERT INTO geocodes_pending (address, status) SELECT 'OVER_QUERY_LIMIT', -1 WHERE NOT EXISTS (SELECT id FROM geocodes_pending WHERE status=-1 LIMIT 1);")
                 db.commit()
                 _query_limit_flag.set()
                 continue
@@ -85,19 +102,14 @@ def cleanup():
 
     logging.debug("Exit flag set")
 
-def signal_term_handler(signal, frame):
+def signal_quit_handler(signal, frame):
     logging.debug("SIGTERM")
     cleanup()
     sys.exit(0)
 
-def signal_interrupt_handler(signal, frame):
-    logging.debug("SIGINT")
-    cleanup()
-    sys.exit(0)
-
 if __name__ == "__main__":
-    signal.signal(signal.SIGTERM, signal_term_handler)
-    signal.signal(signal.SIGINT, signal_interrupt_handler)
+    signal.signal(signal.SIGTERM, signal_quit_handler)
+    signal.signal(signal.SIGINT, signal_quit_handler)
 
     for i in range(0, 9):
         threading.Thread(target=process_queue, daemon=False).start()
