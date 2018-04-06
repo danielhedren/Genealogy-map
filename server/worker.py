@@ -1,14 +1,18 @@
 import config
-import psycopg2, time, logging, json, threading
+import psycopg2, time, logging, json, threading, signal, sys
 from urllib import request, error, parse
 
 logging.basicConfig(level=logging.DEBUG)
+
+_exit_flag = threading.Event()
 
 def process_queue():
     db = psycopg2.connect(config.postgres_connection_string)
     logging.debug("Queue processing worker thread started")
 
-    while True:
+    global _exit_flag
+
+    while not _exit_flag.is_set():
         with db.cursor() as cur:
             cur.execute("SELECT * FROM geocodes_pending WHERE status=0 ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED;")
             result = cur.fetchone()
@@ -58,7 +62,26 @@ def process_queue():
         else:
             time.sleep(1)
 
+def cleanup():
+    global _exit_flag
+    _exit_flag.set()
+
+    logging.debug("Exit flag set")
+
+def signal_term_handler(signal, frame):
+    logging.debug("SIGTERM")
+    cleanup()
+    sys.exit(0)
+
+def signal_interrupt_handler(signal, frame):
+    logging.debug("SIGINT")
+    cleanup()
+    sys.exit(0)
+
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, signal_term_handler)
+    signal.signal(signal.SIGINT, signal_interrupt_handler)
+
     for i in range(0, 9):
-        threading.Thread(target=process_queue, daemon=True).start()
+        threading.Thread(target=process_queue, daemon=False).start()
     process_queue()
