@@ -15,7 +15,7 @@ def process_queue():
     global _query_limit_flag
 
     while not _exit_flag.is_set():
-        while _query_limit_flag.is_set():
+        if _query_limit_flag.is_set():
             # If query limit is hit, retry once every hour
             time.sleep(60 * 60)
 
