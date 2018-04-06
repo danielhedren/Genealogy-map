@@ -5,28 +5,34 @@ from urllib import request, error, parse
 logging.basicConfig(level=logging.DEBUG)
 
 _exit_flag = threading.Event()
+_query_limit_flag = threading.Event()
 
 def process_queue():
     db = psycopg2.connect(config.postgres_connection_string)
     logging.debug("Queue processing worker thread started")
 
     global _exit_flag
+    global _query_limit_flag
 
     while not _exit_flag.is_set():
+        while _query_limit_flag.is_set():
+            # If query limit is hit, retry once every hour
+            time.sleep(60 * 60)
+
         with db.cursor() as cur:
             cur.execute("SELECT * FROM geocodes_pending WHERE status=0 ORDER BY id ASC LIMIT 1 FOR UPDATE SKIP LOCKED;")
             result = cur.fetchone()
         
         if result is not None:
             with db.cursor() as cur:
-                cur.execute("UPDATE geocodes_pending SET status=1 WHERE id=%s ", (result[0],))
+                cur.execute("UPDATE geocodes_pending SET status=1 WHERE id=%s;", (result[0],))
                 db.commit()
 
             try:
                 response = request.urlopen("https://maps.googleapis.com/maps/api/geocode/json?address=" + parse.quote_plus(result[1]) + "&key=" + config.gmaps_api_key)
             except error.HTTPError:
                 with db.cursor() as cur:
-                    cur.execute("DELETE FROM geocodes_pending WHERE id=%s ", (result[0],))
+                    cur.execute("DELETE FROM geocodes_pending WHERE id=%s;", (result[0],))
                     db.commit()
                 continue
 
@@ -46,17 +52,25 @@ def process_queue():
                 cur.execute("INSERT INTO geocodes (address, valid, source) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING;", values)
                 db.commit()
             elif (json_data["status"] == "UNKNOWN_ERROR"):
-                # Retry on unknown error
-                pass
+                # Reset query status on unknown error
+                cur.execute("UPDATE geocodes_pending SET status=0 WHERE id=%s;", (result[0],))
+                db.commit()
+                continue
             elif (json_data["status"] == "OVER_QUERY_LIMIT"):
-                # Wait 6 hours
-                time.sleep(60 * 60 * 6)
+                # Reset query status and set flag
+                cur.execute("UPDATE geocodes_pending SET status=0 WHERE id=%s;", (result[0],))
+                db.commit()
+                _query_limit_flag.set()
+                continue
             elif (json_data["status"] == "INVALID_REQUEST"):
                 # Skip the bad value
                 pass
+            
+            # Clear the query limit flag
+            _query_limit_flag.clear()
 
             with db.cursor() as cur:
-                cur.execute("DELETE FROM geocodes_pending WHERE id=%s ", (result[0],))
+                cur.execute("DELETE FROM geocodes_pending WHERE id=%s;", (result[0],))
                 db.commit()
 
         else:
