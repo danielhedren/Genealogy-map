@@ -15,7 +15,8 @@ logging.debug("Log started")
 db = psycopg2.connect(config.postgres_connection_string)
 
 with db.cursor() as cur:
-    cur.execute("CREATE TABLE IF NOT EXISTS geocodes (address TEXT PRIMARY KEY, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(50));")
+    cur.execute("CREATE TABLE IF NOT EXISTS geocodes (id BIGSERIAL PRIMARY KEY, address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(50));")
+    cur.execute("CREATE INDEX IF NOT EXISTS geocodes_la_idx ON geocodes (lower(address));")
     cur.execute("CREATE TABLE IF NOT EXISTS geocodes_pending (id BIGSERIAL PRIMARY KEY, address TEXT UNIQUE, status SMALLINT);")
     db.commit()
 
@@ -32,7 +33,7 @@ class GeocodePost(Resource):
             locations_list = []
             queue_list = json_data
 
-            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE address in %s;", (tuple(json_data),))
+            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE lower(address) in %s;", (tuple(json_data),))
             for result in cur:
                 queue_list.remove(result[0])
                 if result[3] == True:
