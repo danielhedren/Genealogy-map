@@ -35,7 +35,7 @@ class GeocodePost(Resource):
             lower_list = [element.lower() for element in json_data]
             logging.debug(tuple(queue_list))
 
-            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE lower(address) in %s;", (tuple(lower_list),))
+            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE lower(address) in %s ORDER BY valid DESC;", (tuple(lower_list),))
             for result in cur:
                 logging.debug(result[0])
                 try:
