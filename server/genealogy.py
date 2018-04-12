@@ -8,8 +8,7 @@ import logging
 import psycopg2
 from psycopg2.extras import execute_batch
 
-#logging.basicConfig(filename="genealogy.log", level=logging.DEBUG)
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.CRITICAL)
 logging.debug("Log started")
 
 db = psycopg2.connect(config.postgres_connection_string)
@@ -17,7 +16,7 @@ db = psycopg2.connect(config.postgres_connection_string)
 with db.cursor() as cur:
     cur.execute("CREATE TABLE IF NOT EXISTS geocodes (address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(50), PRIMARY KEY (address, source));")
     cur.execute("CREATE INDEX IF NOT EXISTS geocodes_la_idx ON geocodes (lower(address));")
-    cur.execute("CREATE TABLE IF NOT EXISTS geocodes_pending (id BIGSERIAL PRIMARY KEY, address TEXT UNIQUE, status SMALLINT);")
+    cur.execute("CREATE TABLE IF NOT EXISTS geocodes_pending (id BIGSERIAL PRIMARY KEY, address TEXT UNIQUE, status SMALLINT DEFAULT 0);")
     db.commit()
 
 app = Flask(__name__)
@@ -31,26 +30,25 @@ class GeocodePost(Resource):
         json_data = request.get_json(force=True)
         with db.cursor() as cur:
             locations_list = []
-            queue_list = json_data
-            lower_list = [element.lower() for element in json_data]
-            logging.debug(tuple(queue_list))
+            data_set = set(json_data)
+            logging.debug(tuple(data_set))
 
-            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE lower(address) in %s ORDER BY valid DESC;", (tuple(lower_list),))
+            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE address in %s ORDER BY valid DESC;", (tuple(json_data),))
             for result in cur:
                 logging.debug(result[0])
                 try:
-                    queue_list.remove(result[0])
-                except ValueError:
+                    data_set.remove(result[0])
+                except KeyError:
                     pass
                 else:
                     if result[3] == True:
                         locations_list.append({"address":result[0], "latitude":result[1], "longitude":result[2]})
             
-            logging.debug(queue_list)
+            logging.debug(data_set)
             logging.debug("Inserting into pending")
 
             try:
-                execute_batch(cur, "INSERT INTO geocodes_pending (address, status) VALUES (%s, 0) ON CONFLICT DO NOTHING;", [[a] for a in queue_list])
+                execute_batch(cur, "INSERT INTO geocodes_pending (address) VALUES (%s) ON CONFLICT DO NOTHING;", [[a] for a in data_set])
             except psycopg2.DataError as e:
                 logging.debug(e)
             else:
@@ -70,18 +68,6 @@ class GeocodePost(Resource):
             logging.debug("Queue current " + str(queue_current) + " queue target " + str(queue_target))
 
             return jsonify({"queue_current": queue_current, "queue_target": queue_target, "data": locations_list})
-
-class Geocode(Resource):
-    def get(self, address):
-        with db.cursor() as cur:
-            query = cur.execute("SELECT * FROM geocodes WHERE lower(address)=%s;", (address.lower(),))
-            # Query the result and get cursor.Dumping that data to a JSON is looked by extension
-            if query is not None:
-                result = {"data": [dict(zip(tuple(query.keys()), i)) for i in query.cursor]}
-            else:
-                result = {"data": None}
-        return result
-        # We can have PUT,DELETE,POST here. But in our API GET implementation is sufficient
 
 class QueueStatus(Resource):
     def get(self):
@@ -107,22 +93,14 @@ class GeocodeInsert(Resource):
         
         with db.cursor() as cur:
             logging.debug("Inserting")
-            cur.execute("INSERT INTO geocodes (address, latitude, longitude, valid, source) VALUES (%(address)s, %(lat)s, %(lng)s, true, %(source)s) ON CONFLICT (address, source) DO UPDATE SET latitude=%(lat)s, longitude=%(lng)s;", {"address":data["address"], "lat":data["latitude"], "lng":data["longitude"], "source":"remote_addr|" + request.remote_addr})
+            cur.execute("INSERT INTO geocodes (address, latitude, longitude, valid, source) VALUES (%(address)s, %(lat)s, %(lng)s, true, %(source)s) ON CONFLICT (address, source) DO UPDATE SET latitude=%(lat)s, longitude=%(lng)s;", {"address":data["address"].lower(), "lat":data["latitude"], "lng":data["longitude"], "source":"remote_addr|" + request.remote_addr})
             db.commit()
 
         return ""
 
-api.add_resource(Geocode, '/api/geocode/<string:address>')
 api.add_resource(GeocodePost, '/api/geocodepost')
 api.add_resource(QueueStatus, '/api/queue_status')
 api.add_resource(GeocodeInsert, "/api/geocode_insert")
-
-@app.after_request
-def after_request(response):
-    response.headers.add('Access-Control-Allow-Origin', '*')
-    response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
-    response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE')
-    return response
 
 if __name__ == '__main__':
     app.run()
