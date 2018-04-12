@@ -33,6 +33,7 @@ var Genealogy = {
 	birthLayer: L.layerGroup([]),
 	residenceLayer: L.layerGroup([]),
 	deathLayer: L.layerGroup([]),
+	clusterLayer: L.layerGroup([]),
 	places: {},
 	map: null,
 	Persons: [],
@@ -137,58 +138,60 @@ function removeDragData(ev) {
 //--------------------------------------------------
 
 function parseGED(string) {
+	var t0 = performance.now();
+
 	Genealogy.Persons = []
 	var lines = string.split('\r\n');
 	var dates = [];
 	var places = [];
 
 	for (var i = 0; i < lines.length; i++) {
-		if (lines[i].substr(lines[i].length - 4).localeCompare("INDI") == 0) {
+		if (lines[i].substr(lines[i].length - 4) === "INDI") {
 			var p = new Person();
 			Genealogy.Persons.push(p);
 			var currentTag = null;
 			var currentEvent = null;
 
-			while (lines[++i].substr(0, 1).localeCompare("0") != 0) {
-				var gedconTag = lines[i].split(" ")[1];
+			while (!(lines[++i].charAt(0) === '0')) {
+				var gedconTag = lines[i].substr(2, 4);
 
-				if (gedconTag.localeCompare("BIRT") == 0) {
+				if (gedconTag === "BIRT") {
 					currentTag = "BIRT";
 					currentEvent = {type: "birth"}
-				} else if (gedconTag.localeCompare("DEAT") == 0) {
+				} else if (gedconTag === "DEAT") {
 					currentTag = "DEAT";
 					currentEvent = {type: "death"}
-				} else if (gedconTag.localeCompare("RESI") == 0) {
+				} else if (gedconTag === "RESI") {
 					currentTag = "RESI";
 					currentEvent = {type: "residence"}
-				} else if (gedconTag.localeCompare("GIVN") == 0) {
+				} else if (gedconTag  === "GIVN") {
 					p.givenName = lines[i].substr(7);
-				} else if (gedconTag.localeCompare("SURN") == 0) {
+				} else if (gedconTag  === "SURN") {
 					p.surname = lines[i].substr(7);
-				} else if (gedconTag.localeCompare("SEX") == 0) {
+				} else if (gedconTag  === "SEX ") {
 					p.sex = lines[i].substr(lines[i].length - 1);
-				} else if (gedconTag.localeCompare("DATE") == 0) {
+				} else if (gedconTag === "DATE") {
 					if (currentTag == null || currentEvent == null) {
 						// Skip for unimplemented tags
 					} else {
 						currentEvent.date = lines[i].substr(7);
 					}
-				} else if (gedconTag.localeCompare("PLAC") == 0) {
+				} else if (gedconTag === "PLAC") {
 					if (currentTag == null || currentEvent == null) {
 						// Skip for unimplemented tags
 					} else {
 						currentEvent.place = lines[i].substr(7);
 					}
-				} else if (gedconTag.localeCompare("ADDR") == 0) {
+				} else if (gedconTag === "ADDR") {
 					if (currentTag == null || currentEvent == null) {
 						// Skip for unimplemented tags
-					} else if (currentTag.localeCompare("RESI") == 0) {
+					} else if (currentTag === "RESI") {
 						currentEvent.place = lines[i].substr(7);
 					}
 				}
 
 				// Push an event when the next line is a new tag
-				if (lines[i + 1].substr(0, 1).localeCompare("1") == 0 && currentEvent != null) {
+				if (currentEvent != null && lines[i + 1].charAt(0) === '1') {
 					p.addEvent(Object.assign({}, currentEvent));
 					currentEvent = null;
 				}
@@ -200,6 +203,9 @@ function parseGED(string) {
 	}
 
 	Genealogy.reloaded = false;
+
+	console.log("PERFORMANCE: parseGED took " + (performance.now() - t0) + " milliseconds.")
+
 	requestPlaces();
 }
 
@@ -222,13 +228,15 @@ function decodeString(string) {
 }
 
 function requestPlaces() {
+	var t0 = performance.now();
+
 	var places = [];
 
 	for (var p in Genealogy.Persons) {
 		for (var e in Genealogy.Persons[p].events) {
 			var event = Genealogy.Persons[p].events[e];
 			if (event.place != null && !places.includes(event.place)) {
-				places.push(event.place);
+				places.push(event.place.toLowerCase());
 			}
 		}
 	}
@@ -261,6 +269,8 @@ function requestPlaces() {
 	xmlHttp.open("POST", Genealogy.apiUri + "/geocodepost", true); // true for asynchronous
 	xmlHttp.setRequestHeader("Content-Type", "application/json");
 	xmlHttp.send(JSON.stringify(places));
+
+	console.log("PERFORMANCE: requestPlaces took " + (performance.now() - t0) + " milliseconds.")
 }
 
 function queuePoller(queue_target) {
@@ -311,7 +321,7 @@ function receivedPlacesCallback() {
 				if (eventDate < Genealogy.minimumYear) Genealogy.minimumYear = eventDate;
 			}
 
-			if (event.place != null && !missingPlaces.includes(event.place) && Genealogy.places[event.place] == null) {
+			if (event.place != null && !missingPlaces.includes(event.place) && Genealogy.places[event.place.toLowerCase()] == null) {
 				missingPlaces.push(event.place);
 			}
 		}
@@ -346,62 +356,72 @@ function pickMissingPlace(address) {
 	printInfo("Right click on the map to set the location of " + decodeString(address));
 }
 
-function updateLayers(startYear, endYear) {
+function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.currentEndYear) {
+	var t0 = performance.now();
+	
 	Genealogy.currentStartYear = startYear;
 	Genealogy.currentEndYear = endYear;
 
 	Genealogy.heatmapData.data = [];
-	Genealogy.birthMarkers = [];
-	Genealogy.residenceMarkers = [];
-	Genealogy.deathMarkers = [];
+
+	Genealogy.clusterMarkers = L.markerClusterGroup();
 
 	for (var person of Genealogy.Persons) {
 		for (var event of person.events) {
 			// Update map lists
 			if (event.date == null || (person.getEventDate(event) >= startYear && person.getEventDate(event) <= endYear)) {
-				if (event.place != null && Genealogy.places[event.place] != null) {
-					if (event.type.localeCompare("birth") == 0) {
-						Genealogy.birthMarkers.push(L.marker([
-							Genealogy.places[event.place][0],
-							Genealogy.places[event.place][1]
-						]).bindPopup(person.getEventText(event)
-						+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
-					));
+				if (event.place != null && Genealogy.places[event.place.toLowerCase()] != null) {
+					var placeLower = event.place.toLowerCase();
 
-						Genealogy.heatmapData.data.push({lat: Genealogy.places[event.place][0], lng: Genealogy.places[event.place][1], count: 1})
-					} else if (event.type.localeCompare("death") == 0) {
-						Genealogy.deathMarkers.push(L.marker([
-							Genealogy.places[event.place][0],
-							Genealogy.places[event.place][1]
-						]).bindPopup(person.getEventText(event)
-						+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
-					));
+					if (event.type === "birth") {
+						if (Genealogy.map.hasLayer(Genealogy.birthLayer)) {
+							Genealogy.clusterMarkers.addLayer(L.marker([
+								Genealogy.places[placeLower][0],
+								Genealogy.places[placeLower][1]
+							]).bindPopup(person.getEventText(event)
+							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
+							));
+						}
 
-						Genealogy.heatmapData.data.push({lat: Genealogy.places[event.place][0], lng: Genealogy.places[event.place][1], count: 1})
-					} else if (event.type.localeCompare("residence") == 0) {
-						Genealogy.residenceMarkers.push(L.marker([
-							Genealogy.places[event.place][0],
-							Genealogy.places[event.place][1]
-						]).bindPopup(person.getEventText(event)
-						+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
-					));
+						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1], count: 1})
+					} else if (event.type === "death") {
+						if (Genealogy.map.hasLayer(Genealogy.deathLayer)) {
+							Genealogy.clusterMarkers.addLayer(L.marker([
+								Genealogy.places[placeLower][0],
+								Genealogy.places[placeLower][1]
+							]).bindPopup(person.getEventText(event)
+							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
+							));
+						}
 
+						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1], count: 1})
+					} else if (event.type === "residence") {
+						if (Genealogy.map.hasLayer(Genealogy.residenceLayer)) {
+							Genealogy.clusterMarkers.addLayer(L.marker([
+								Genealogy.places[placeLower][0],
+								Genealogy.places[placeLower][1]
+							]).bindPopup(person.getEventText(event)
+							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
+							));
+						}
 					}
 				}
 			}
 		}
 	}
 
-	Genealogy.birthLayer.clearLayers();
-	Genealogy.birthLayer.addLayer(L.layerGroup(Genealogy.birthMarkers));
+	console.log("PERFORMANCE: updateLayers loop took " + (performance.now() - t0) + " milliseconds.")
 
-	Genealogy.residenceLayer.clearLayers();
-	Genealogy.residenceLayer.addLayer(L.layerGroup(Genealogy.residenceMarkers));
+	Genealogy.clusterLayer.clearLayers();
+	if (Genealogy.map.hasLayer(Genealogy.birthLayer) || Genealogy.map.hasLayer(Genealogy.residenceLayer) || Genealogy.map.hasLayer(Genealogy.deathLayer)) {
+		Genealogy.clusterLayer.addLayer(Genealogy.clusterMarkers);
+	}
 
-	Genealogy.deathLayer.clearLayers();
-	Genealogy.deathLayer.addLayer(L.layerGroup(Genealogy.deathMarkers));
+	if (Genealogy.map.hasLayer(Genealogy.heatmapLayer)) {
+		Genealogy.heatmapLayer.setData(Genealogy.heatmapData);
+	}
 
-	Genealogy.heatmapLayer.setData(Genealogy.heatmapData);
+	console.log("PERFORMANCE: updateLayers took " + (performance.now() - t0) + " milliseconds.")
 }
 
 //--------------------------------------------------
@@ -432,11 +452,16 @@ function onSliderUpdate() {
 	document.getElementById("date-text").innerHTML = "Anno " + date + " to " + (date + range) + " (" + range + " years)";
 }
 
+function onOverlayAdd(e) {
+	updateLayers();
+}
+
 $(document).ready(function () {
 	Genealogy.map = new L.Map('map-canvas', {
+		preferCanvas: true,
 		center: new L.LatLng(55, 30),
 		zoom: 4,
-		layers: [Genealogy.baseLayer, Genealogy.heatmapLayer]
+		layers: [Genealogy.baseLayer, Genealogy.heatmapLayer, Genealogy.clusterLayer]
 	});
 
 	Genealogy.heatmapLayer.setData(Genealogy.heatmapData);
@@ -449,7 +474,7 @@ $(document).ready(function () {
 
 	Genealogy.map.on("contextmenu", function (event) {
 		if (Genealogy.pickingAddress == null) return;
-		Genealogy.places[Genealogy.pickingAddress] = [event.latlng.lat, event.latlng.lng];
+		Genealogy.places[Genealogy.pickingAddress.toLowerCase()] = [event.latlng.lat, event.latlng.lng];
 
 		var xmlHttp = new XMLHttpRequest();
 		xmlHttp.open("POST", Genealogy.apiUri + "/geocode_insert", true); // true for asynchronous
@@ -460,6 +485,9 @@ $(document).ready(function () {
 		printInfo("Location set");
 		updateLayers(Genealogy.currentStartYear, Genealogy.currentEndYear);
 	});
+
+	Genealogy.map.on('overlayadd', onOverlayAdd);
+	Genealogy.map.on('overlayremove', onOverlayAdd);
 
 	document.getElementById("dateStart").onchange = function() {
 		onSliderUpdate();
