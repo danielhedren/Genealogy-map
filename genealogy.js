@@ -62,8 +62,9 @@ class Person {
 	}
 
 	addEvent(event) {
-		event.year = this.getEventYear(event);
-		event.text = this.getEventText(event);
+		// Do this while waiting for the server in requestPlaces
+		// event.year = this.getEventYear(event);
+		// event.text = this.getEventText(event);
 		
 		this.events.push(event);
 
@@ -75,6 +76,7 @@ class Person {
 		var eventStr = this.givenName + " " + this.surname;
 		if (event.date != null) eventStr += "<br>" + event.date;
 		eventStr += "<br>" + event.place;
+		eventStr += "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
 
 		return eventStr;
 	}
@@ -112,6 +114,8 @@ function dropHandler(ev) {
 
 	// TODO: check for correctly formatted GEDCON file instead of .ged extension
 	if (file == null || file.name.split(".").pop().toLowerCase() != "ged") return;
+
+	Genealogy.t0 = performance.now();
 
 	var fileReader = new FileReader();
 	fileReader.onload = (function (file) {
@@ -236,9 +240,8 @@ function requestPlaces() {
 
 	for (var p in Genealogy.Persons) {
 		for (var e in Genealogy.Persons[p].events) {
-			var event = Genealogy.Persons[p].events[e];
-			if (event.place != null && !places.includes(event.place)) {
-				places.push(event.place.toLowerCase());
+			if (Genealogy.Persons[p].events[e].place != null) {
+				places.push(Genealogy.Persons[p].events[e].place.toLowerCase());
 			}
 		}
 	}
@@ -246,6 +249,7 @@ function requestPlaces() {
 	var xmlHttp = new XMLHttpRequest();
 	xmlHttp.onreadystatechange = function() {
 		if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+			console.log("PERFORMANCE: requestPlaces:xmlHttp took " + (performance.now() - t0) + " milliseconds.")
 			var jsonResponse;
 
 			// Break if response is unparseable
@@ -272,7 +276,58 @@ function requestPlaces() {
 	xmlHttp.setRequestHeader("Content-Type", "application/json");
 	xmlHttp.send(JSON.stringify(places));
 
+	// Do some stuff here, we have about 15ms before the server responds
+
+	Genealogy.minimumYear = 10000;
+	Genealogy.maximumYear = -1;
+
+	for (var p in Genealogy.Persons) {
+		for (var e in Genealogy.Persons[p].events) {
+			var event = Genealogy.Persons[p].events[e];
+
+			event.year = Genealogy.Persons[p].getEventYear(event);
+			event.text = Genealogy.Persons[p].getEventText(event);
+
+			if (event.year != 0) {
+				if (event.year > Genealogy.maximumYear) Genealogy.maximumYear = event.year;
+				if (event.year < Genealogy.minimumYear) Genealogy.minimumYear = event.year;
+			}
+		}
+	}
+
+	document.getElementById("dateStart").min = Genealogy.minimumYear;
+	document.getElementById("dateStart").max = Genealogy.maximumYear;
+	document.getElementById("dateRange").max = Genealogy.maximumYear - Genealogy.minimumYear;
+	document.getElementById("dateRange").value = document.getElementById("dateRange").max;
+
 	console.log("PERFORMANCE: requestPlaces took " + (performance.now() - t0) + " milliseconds.")
+}
+
+function receivedPlacesCallback() {
+	// Update the interface first and defer the stuff we don't care about as much
+	onSliderUpdate();
+
+	var t0 = performance.now();
+
+	var missingPlaces = [];
+
+	for (var person of Genealogy.Persons) {
+		for (var event of person.events) {
+			if (event.place != null && Genealogy.places[event.place.toLowerCase()] == null && !missingPlaces.includes(event.place) ) {
+				missingPlaces.push(event.place);
+			}
+		}
+	}
+
+	printInfo(missingPlaces.length + " missing places.");
+
+	var str = "";
+	for (var place of missingPlaces) {
+		str += "<tr id=\'" + encodeString(place) + "\'><td>" + place + "</td><td><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Pick on map</a></td></tr>";
+	}
+	document.getElementById("places-table-tbody").innerHTML = str;
+
+	console.log("PERFORMANCE: receivedPlacesCallback took " + (performance.now() - t0) + " milliseconds.")
 }
 
 function queuePoller(queue_target) {
@@ -307,41 +362,6 @@ function queuePoller(queue_target) {
 	}
 	xmlHttp.open("GET", Genealogy.apiUri + "/queue_status", true); // true for asynchronous
 	xmlHttp.send();
-}
-
-function receivedPlacesCallback() {
-	Genealogy.minimumYear = 10000;
-	Genealogy.maximumYear = -1;
-
-	var missingPlaces = [];
-
-	for (var person of Genealogy.Persons) {
-		for (var event of person.events) {
-			if (event.year != 0) {
-				if (event.year > Genealogy.maximumYear) Genealogy.maximumYear = event.year;
-				if (event.year < Genealogy.minimumYear) Genealogy.minimumYear = event.year;
-			}
-
-			if (event.place != null && !missingPlaces.includes(event.place) && Genealogy.places[event.place.toLowerCase()] == null) {
-				missingPlaces.push(event.place);
-			}
-		}
-	}
-
-	document.getElementById("dateStart").min = Genealogy.minimumYear;
-	document.getElementById("dateStart").max = Genealogy.maximumYear;
-	document.getElementById("dateRange").max = Genealogy.maximumYear - Genealogy.minimumYear;
-	document.getElementById("dateRange").value = document.getElementById("dateRange").max;
-
-	printInfo(missingPlaces.length + " missing places.");
-
-	var str = "";
-	for (var place of missingPlaces) {
-		str += "<tr id=\'" + encodeString(place) + "\'><td>" + place + "</td><td><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Pick on map</a></td></tr>";
-	}
-	document.getElementById("places-table-tbody").innerHTML = str;
-
-	onSliderUpdate();
 }
 
 function pickMissingPlace(address) {
@@ -379,9 +399,8 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 							Genealogy.clusterMarkers.addLayer(L.marker([
 								Genealogy.places[placeLower][0],
 								Genealogy.places[placeLower][1]
-							]).bindPopup(event.text
-							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
-							));
+							]).bindPopup(event.text)
+							);
 						}
 
 						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1]})
@@ -390,9 +409,8 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 							Genealogy.clusterMarkers.addLayer(L.marker([
 								Genealogy.places[placeLower][0],
 								Genealogy.places[placeLower][1]
-							]).bindPopup(event.text
-							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
-							));
+							]).bindPopup(event.text)
+							);
 						}
 
 						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1]})
@@ -401,9 +419,8 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 							Genealogy.clusterMarkers.addLayer(L.marker([
 								Genealogy.places[placeLower][0],
 								Genealogy.places[placeLower][1]
-							]).bindPopup(event.text
-							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
-							));
+							]).bindPopup(event.text)
+							);
 						}
 					}
 				}
@@ -423,6 +440,11 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 	}
 
 	console.log("PERFORMANCE: updateLayers took " + (performance.now() - t0) + " milliseconds.")
+
+	if (Genealogy.t0 != null) {
+		console.log("PERFORMANCE: GEDCOM load took " + (performance.now() - Genealogy.t0) + " milliseconds.")
+		Genealogy.t0 = null;
+	}
 }
 
 //--------------------------------------------------
