@@ -456,7 +456,7 @@ function onOverlayAdd(e) {
 	updateLayers();
 }
 
-$(document).ready(function () {
+document.addEventListener("DOMContentLoaded", function(event) {
 	Genealogy.map = new L.Map('map-canvas', {
 		preferCanvas: true,
 		center: new L.LatLng(55, 30),
