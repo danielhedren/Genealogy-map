@@ -62,10 +62,13 @@ class Person {
 	}
 
 	addEvent(event) {
+		event.year = this.getEventYear(event);
+		event.text = this.getEventText(event);
+		
 		this.events.push(event);
 
-		if (event.type.localeCompare("birth") == 0) this.birth = event.date;
-		else if (event.type.localeCompare("death") == 0) this.death = event.date;
+		if (event.type === "birth") this.birth = event.date;
+		else if (event.type === "death") this.death = event.date;
 	}
 
 	getEventText(event) {
@@ -76,17 +79,17 @@ class Person {
 		return eventStr;
 	}
 
-	getEventDate(event) {
-		var date = 0;
+	getEventYear(event) {
+		var year = 0;
 		if (event.date != null) {
 			for (var part of event.date.split(" ")) {
 				if (part.length == 4) {
-					date = Number(part);
+					year = Number(part);
 					break;
 				}
 			}
 		}
-		return Number(date);
+		return year;
 	}
 }
 
@@ -142,7 +145,6 @@ function parseGED(string) {
 
 	Genealogy.Persons = []
 	var lines = string.split('\r\n');
-	var dates = [];
 	var places = [];
 
 	for (var i = 0; i < lines.length; i++) {
@@ -286,13 +288,13 @@ function queuePoller(queue_target) {
 				return;
 			}
 
-			if (jsonResponse.status.localeCompare("OK") == 0 && jsonResponse.queue_current != -1 && jsonResponse.queue_current < queue_target) {
+			if (jsonResponse.status === "OK" && jsonResponse.queue_current != -1 && jsonResponse.queue_current < queue_target) {
 				printInfo("Fetching additional places (" + (queue_target - jsonResponse.queue_current) + " remaining)");
 				setTimeout(function() {
 					queuePoller(queue_target)
 				}, 1000);
 			} else {
-				if (jsonResponse.status.localeCompare("OK") != 0) {
+				if (jsonResponse.status === "OK") {
 					printInfo("Place fetching status: " + jsonResponse.status)
 				}
 				if (!Genealogy.reloaded) {
@@ -315,10 +317,9 @@ function receivedPlacesCallback() {
 
 	for (var person of Genealogy.Persons) {
 		for (var event of person.events) {
-			var eventDate = person.getEventDate(event);
-			if (eventDate != 0) {
-				if (eventDate > Genealogy.maximumYear) Genealogy.maximumYear = eventDate;
-				if (eventDate < Genealogy.minimumYear) Genealogy.minimumYear = eventDate;
+			if (event.year != 0) {
+				if (event.year > Genealogy.maximumYear) Genealogy.maximumYear = event.year;
+				if (event.year < Genealogy.minimumYear) Genealogy.minimumYear = event.year;
 			}
 
 			if (event.place != null && !missingPlaces.includes(event.place) && Genealogy.places[event.place.toLowerCase()] == null) {
@@ -369,7 +370,7 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 	for (var person of Genealogy.Persons) {
 		for (var event of person.events) {
 			// Update map lists
-			if (event.date == null || (person.getEventDate(event) >= startYear && person.getEventDate(event) <= endYear)) {
+			if (event.date == null || (event.year >= startYear && event.year <= endYear)) {
 				if (event.place != null && Genealogy.places[event.place.toLowerCase()] != null) {
 					var placeLower = event.place.toLowerCase();
 
@@ -378,29 +379,29 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 							Genealogy.clusterMarkers.addLayer(L.marker([
 								Genealogy.places[placeLower][0],
 								Genealogy.places[placeLower][1]
-							]).bindPopup(person.getEventText(event)
+							]).bindPopup(event.text
 							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
 							));
 						}
 
-						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1], count: 1})
+						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1]})
 					} else if (event.type === "death") {
 						if (Genealogy.map.hasLayer(Genealogy.deathLayer)) {
 							Genealogy.clusterMarkers.addLayer(L.marker([
 								Genealogy.places[placeLower][0],
 								Genealogy.places[placeLower][1]
-							]).bindPopup(person.getEventText(event)
+							]).bindPopup(event.text
 							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
 							));
 						}
 
-						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1], count: 1})
+						Genealogy.heatmapData.data.push({lat: Genealogy.places[placeLower][0], lng: Genealogy.places[placeLower][1]})
 					} else if (event.type === "residence") {
 						if (Genealogy.map.hasLayer(Genealogy.residenceLayer)) {
 							Genealogy.clusterMarkers.addLayer(L.marker([
 								Genealogy.places[placeLower][0],
 								Genealogy.places[placeLower][1]
-							]).bindPopup(person.getEventText(event)
+							]).bindPopup(event.text
 							+ "<br><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(event.place) + "\');\">Change location</a></td></tr>"
 							));
 						}
@@ -433,7 +434,7 @@ function printInfo(text) {
 }
 
 function toggleSidebar() {
-	if (document.getElementById("missing-places").style.display.localeCompare("none") == 0) {
+	if (document.getElementById("missing-places").style.display === "none") {
 		document.getElementById("missing-places").style.display = "block";
 		document.getElementById("map-canvas").style.width = "calc(80vw - 10px)"
 	} else {
