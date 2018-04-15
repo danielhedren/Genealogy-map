@@ -13,12 +13,32 @@
 	<link rel="stylesheet" href="MarkerCluster.Default.css">
 </head>
 <body ondrop="dropHandler(event);" ondragover="dragOverHandler(event);">
-	<div class="modal" id="modal-loading">
+	<div class="modal" id="modal-getstarted">
 		<div class="modal-content">
-			<span class="close" onclick="document.getElementById('modal-loading').style.display='none';">&times;</span>
-			<span id="modal-text">test</span>
+			<div class="modal-header">
+				<span id="modal-header-text">Get started!</span>
+				<span class="close" onclick="document.getElementById('modal-getstarted').style.display='none';">&times;</span>
+			</div>
+			<span id="modal-text">
+				Drag a .ged (GEDCOM) file onto the page or <input id="file-input" name="file-input" type="file">
+				<span style="font-size: 16px;">
+				<br><br>These GEDCOM files are normally easily available through an export option in your genealogy software, see external examples for <a target="_blank" href="http://helpcenter.myheritage.com/Family-Tree-Builder/Family-Tree/634030922501594942/How-do-I-export-a-GEDCOM-file-from-the-Family-Tree-Builder.htm">MyHeritage</a> and <a target="_blank" href="https://support.mackiev.com/572636-Export-and-Import-of-GEDCOM-Files-in-Family-Tree-Maker">Family Tree Maker</a>.
+				<br><br>
+				If you just want to try genealogy map out, <a href="#" onclick="loadDemoData()">load demonstration data</a>.
+				</span>
+			</span>
 		</div>
 	</div>
+	<div class="modal" id="modal-loading" style="display: none;">
+			<div class="modal-content">
+				<div class="modal-header">
+					<span id="modal-header-text">Loading</span>
+					<span class="close" onclick="document.getElementById('modal-loading').style.display='none';">&times;</span>
+				</div>
+				<span id="modal-text">
+				</span>
+			</div>
+		</div>
 	<div id="header">Genealogy map</div>
 	<div class="tab-btn active" id="map-tab-button"><span>Map</span></div>
 	<div class="tab-btn" id="places-tab-button"><span>Places</span></div>
@@ -27,7 +47,6 @@
 		<div class="slidecontainer">
 			<input type="range" min="1" max="1" value="1" class="slider" id="dateStart">
 			<input type="range" min="1" max="1" value="1" class="slider" id="dateRange">
-			<span id="date-text"></span>
 		</div>
 	</div>
 	<div class="tab" id="places-tab" style="display:none";>

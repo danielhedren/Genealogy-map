@@ -96,8 +96,31 @@ class Person {
 }
 
 //--------------------------------------------------
-// Drag and drop handling
+// File handling
 //--------------------------------------------------
+
+function loadDemoData() {
+	Genealogy.t0 = performance.now();
+
+	var xmlHttp = new XMLHttpRequest();
+	xmlHttp.onreadystatechange = function() { 
+		if (xmlHttp.readyState == 4 && xmlHttp.status == 200) {
+			parseGED(xmlHttp.response);
+		}
+	}
+	xmlHttp.open("GET", "/EnglishTudorHouse.ged", true); // true for asynchronous
+	xmlHttp.send();
+
+	document.getElementById('modal-getstarted').style.display='none';
+	document.getElementById('modal-loading').style.display='block';
+}
+
+document.addEventListener("DOMContentLoaded", function(event) {
+	document.getElementById("file-input").onchange = function(event) {
+		var fileList = document.getElementById("file-input").files;
+		handleFile(fileList[0]);
+	}
+});
 
 function dropHandler(ev) {
 	ev.preventDefault();
@@ -112,18 +135,7 @@ function dropHandler(ev) {
 		file = ev.dataTransfer.files[0];
 	}
 
-	// TODO: check for correctly formatted GEDCON file instead of .ged extension
-	if (file == null || file.name.split(".").pop().toLowerCase() != "ged") return;
-
-	Genealogy.t0 = performance.now();
-
-	var fileReader = new FileReader();
-	fileReader.onload = (function (file) {
-		return function (e) {
-			parseGED(e.target.result);
-		};
-	})(file);
-	fileReader.readAsText(file);
+	handleFile(file);
 
 	removeDragData(ev)
 }
@@ -138,6 +150,22 @@ function removeDragData(ev) {
 	} else {
 		ev.dataTransfer.clearData();
 	}
+}
+
+function handleFile(file) {
+	// TODO: check for correctly formatted GEDCON file instead of .ged extension
+	if (file == null || file.name.split(".").pop().toLowerCase() != "ged") return;
+
+	Genealogy.t0 = performance.now();
+
+	var fileReader = new FileReader();
+	fileReader.onload = function (e) {
+			parseGED(e.target.result);
+	};
+	fileReader.readAsText(file);
+
+	document.getElementById('modal-getstarted').style.display='none';
+	document.getElementById('modal-loading').style.display='block';
 }
 
 //--------------------------------------------------
@@ -442,6 +470,7 @@ function updateLayers(startYear=Genealogy.currentStartYear, endYear=Genealogy.cu
 	console.log("PERFORMANCE: updateLayers took " + (performance.now() - t0) + " milliseconds.")
 
 	if (Genealogy.t0 != null) {
+		document.getElementById('modal-loading').style.display='none';
 		console.log("PERFORMANCE: GEDCOM load took " + (performance.now() - Genealogy.t0) + " milliseconds.")
 		Genealogy.t0 = null;
 	}
@@ -472,7 +501,7 @@ function onSliderUpdate() {
 	if (date + range > Genealogy.maximumYear) range = Genealogy.maximumYear - date;
 
 	updateLayers(date, date + range);
-	document.getElementById("date-text").innerHTML = "Anno " + date + " to " + (date + range) + " (" + range + " years)";
+	document.getElementById("header").innerHTML = "Genealogy map " + date + "-" + (date + range);
 }
 
 function onOverlayAdd(e) {
