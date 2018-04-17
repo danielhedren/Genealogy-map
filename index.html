@@ -29,30 +29,23 @@
 			</span>
 		</div>
 	</div>
-	<div class="modal" id="modal-loading" style="display: none;">
-			<div class="modal-content">
-				<div class="modal-header">
-					<span id="modal-header-text">Loading</span>
-					<span class="close" onclick="document.getElementById('modal-loading').style.display='none';">&times;</span>
-				</div>
-				<span id="modal-text">
-				</span>
-			</div>
-		</div>
+	<div class="modal" id="modal-loading" style="display: none; height: 100%; overflow:hidden;">
+		<div class="loader" style="position: absolute; margin: auto; top: 0; right: 0; bottom: 0; left: 0;"></div>
+	</div>
 	<div id="header">Genealogy map</div>
 	<div class="tab-btn active" id="map-tab-button"><span>Map</span></div>
 	<div class="tab-btn" id="places-tab-button"><span>Places</span></div>
 	<div class="tab" id="map-tab">
 		<div class="heatmap" id="map-canvas"></div>
 		<div class="slidecontainer">
-			<input type="range" min="1" max="1" value="1" class="slider" id="dateStart">
-			<input type="range" min="1" max="1" value="1" class="slider" id="dateRange">
+			<input type="range" title="Choose the starting year of the visualisation" min="1" max="1" value="1" class="slider" id="dateStart">
+			<input type="range" title="Choose the year span of the visualisation" min="1" max="1" value="1" class="slider" id="dateRange">
 		</div>
 	</div>
 	<div class="tab" id="places-tab" style="display:none";>
 		<table id="places-table">
 			<thead>
-				<tr><th>Missing address</th></tr>
+				<tr><th>Missing address</th><th>Filter <input type="text" title="Start typing to filter the missing places" id="filter-input" oninput="onFilterChange()"></th></tr>
 			</thead>
 			<tbody id="places-table-tbody"></tbody>
 		</table>

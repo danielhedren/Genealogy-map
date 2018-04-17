@@ -1,8 +1,9 @@
 :root {
-    --bgcolor: #263248;
+    /* --bgcolor: #263248; */
+    --bgcolor: #272730;
     --fgcolor: whitesmoke;
     --fg-dark-color: rgba(245, 245, 245, 0.658);
-    --accolor: rgb(174, 255, 82);
+    --accolor: #F5DD90;
 }
 
 body {background-color: var(--bgcolor); overflow: hidden;}
@@ -60,9 +61,13 @@ body {background-color: var(--bgcolor); overflow: hidden;}
     height: 80vh;
     overflow: hidden;
 }
-#places-tab {
+.tab#places-tab {
     background-color: var(--fgcolor);
     overflow: scroll;
+    width: 600px;
+    right: 0px;
+    left: unset;
+    border-left: 1px solid var(--bgcolor);
 }
 .info {
     position: absolute;
@@ -158,4 +163,20 @@ th, td {
 
 tr:hover {
     background-color: white;
+}
+
+.loader {
+    border-top: 16px solid var(--bgcolor);
+    border-right: 16px solid var(--fgcolor);
+    border-bottom: 16px solid var(--bgcolor);
+    border-left: 16px solid var(--fgcolor);
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }

@@ -351,11 +351,34 @@ function receivedPlacesCallback() {
 
 	var str = "";
 	for (var place of missingPlaces) {
-		str += "<tr id=\'" + encodeString(place) + "\'><td>" + place + "</td><td><a href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Pick on map</a></td></tr>";
+		str += "<tr id=\'" + encodeString(place) + "\'><td>" + place + "</td><td><a title=\"You will be prompted to place this location on the map\" href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Place on map</a></td></tr>";
 	}
 	document.getElementById("places-table-tbody").innerHTML = str;
 
 	console.log("PERFORMANCE: receivedPlacesCallback took " + (performance.now() - t0) + " milliseconds.")
+}
+
+function onFilterChange() {
+	console.log(document.getElementById("filter-input").value);
+
+	var missingPlaces = [];
+
+	var regexp = new RegExp(".*" + document.getElementById("filter-input").value.toLowerCase() + ".*");
+
+	for (var person of Genealogy.Persons) {
+		for (var event of person.events) {
+			if (event.place != null && Genealogy.places[event.place.toLowerCase()] == null && !missingPlaces.includes(event.place) && regexp.test(event.place.toLowerCase())) {
+				missingPlaces.push(event.place);
+			}
+		}
+	}
+
+	var str = "";
+	for (var place of missingPlaces) {
+		str += "<tr id=\'" + encodeString(place) + "\'><td>" + place + "</td><td><a title=\"You will be prompted to place this location on the map\" href=\"#\" onclick=\"pickMissingPlace(\'" + encodeString(place) + "\');\">Place on map</a></td></tr>";
+	}
+
+	document.getElementById("places-table-tbody").innerHTML = str;
 }
 
 function queuePoller(queue_target) {
@@ -559,14 +582,14 @@ document.addEventListener("DOMContentLoaded", function(event) {
 
 	document.getElementById("places-tab-button").onclick = function() {
 		document.getElementById("places-tab").style.display = "block";
-		document.getElementById("map-tab").style.display = "none";
+		//document.getElementById("map-tab").style.display = "none";
 		document.getElementById("map-tab-button").className = "tab-btn";
 		document.getElementById("places-tab-button").className += " active";
 	}
 
 	document.getElementById("map-tab-button").onclick = function() {
 		document.getElementById("places-tab").style.display = "none";
-		document.getElementById("map-tab").style.display = "block";
+		//document.getElementById("map-tab").style.display = "block";
 		document.getElementById("map-tab-button").className += " active";
 		document.getElementById("places-tab-button").className = "tab-btn";
 	}
