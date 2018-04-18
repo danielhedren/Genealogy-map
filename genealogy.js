@@ -15,7 +15,7 @@ var Genealogy = {
 		data: []
 	},	
 	baseLayer: L.tileLayer(
-		'http://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+		'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 			attribution: 'Daniel Hedren 2018',
 			maxZoom: 18
 		}
