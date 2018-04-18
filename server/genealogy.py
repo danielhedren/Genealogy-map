@@ -60,6 +60,7 @@ class GeocodePost(Resource):
                 execute_batch(cur, "INSERT INTO geocodes_pending (address) VALUES (%s) ON CONFLICT DO NOTHING;", [[a] for a in json_data])
             except psycopg2.DataError as e:
                 logging.debug(e)
+                db.rollback()
             else:
                 db.commit()
             
@@ -105,15 +106,15 @@ class GeocodeInsert(Resource):
         if data.latitude < -90 or data.latitude > 90 or data.longitude < -180 or data.longitude > 180:
             return "{status: \"BAD_REQUEST\"}", 400
         
-        try:
-            ipaddress.ip_address(request.remote_addr)
-        except ipaddress.AddressValueError:
-            return "{status: \"BAD_REQUEST\"}", 400
-        
         with db.cursor() as cur:
             logging.debug("Inserting")
-            cur.execute("INSERT INTO geocodes (address, latitude, longitude, valid, source) VALUES (%(address)s, %(lat)s, %(lng)s, true, %(source)s) ON CONFLICT (address, source) DO UPDATE SET latitude=%(lat)s, longitude=%(lng)s;", {"address":data["address"].lower(), "lat":data["latitude"], "lng":data["longitude"], "source":"remote_addr|" + request.remote_addr})
-            db.commit()
+            try:
+                cur.execute("INSERT INTO geocodes (address, latitude, longitude, valid, source) VALUES (%(address)s, %(lat)s, %(lng)s, true, %(source)s) ON CONFLICT (address, source) DO UPDATE SET latitude=%(lat)s, longitude=%(lng)s;", {"address":data["address"].lower(), "lat":data["latitude"], "lng":data["longitude"], "source":"remote_addr|" + request.remote_addr})
+            except Exception:
+                db.rollback()
+                return "{status: \"BAD_REQUEST\"}", 400 
+            else:
+                db.commit()
 
         return "{status: \"OK\"}", 201
 
