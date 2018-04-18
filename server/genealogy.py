@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_restful import Resource, Api
 from json import dumps
 import json
@@ -8,6 +8,7 @@ import psycopg2
 from psycopg2.extras import execute_batch
 import time
 import ipaddress
+import datetime
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -21,6 +22,8 @@ with db.cursor() as cur:
 
 app = Flask(__name__)
 api = Api(app)
+
+app.secret_key = config.secret_key
 
 class GeocodePost(Resource):
     def post(self):
@@ -77,7 +80,9 @@ class GeocodePost(Resource):
 
             logging.debug("Rest took " + str(time.time() - t0) + " s")
 
-            return jsonify({"status": "OK", "queue_current": queue_current, "queue_target": queue_target, "data": locations_list}), 202
+            session["timestamp"] = datetime.datetime.now()
+
+            return jsonify({"status": "OK", "queue_current": queue_current, "queue_target": queue_target, "data": locations_list})
 
 class QueueStatus(Resource):
     def get(self):
@@ -103,8 +108,11 @@ class GeocodeInsert(Resource):
         if data is None:
             return "{status: \"BAD_REQUEST\"}", 400
         
-        if data.latitude < -90 or data.latitude > 90 or data.longitude < -180 or data.longitude > 180:
+        if data["latitude"] < -90 or data["latitude"] > 90 or data["longitude"] < -180 or data["longitude"] > 180:
             return "{status: \"BAD_REQUEST\"}", 400
+
+        if "timestamp" not in session:
+            return "{status: \"FORBIDDEN\"}", 403
         
         with db.cursor() as cur:
             logging.debug("Inserting")
@@ -117,6 +125,11 @@ class GeocodeInsert(Resource):
                 db.commit()
 
         return "{status: \"OK\"}", 201
+
+@app.before_request
+def session_timeout():
+    if "timestamp" in session and (datetime.datetime.now() - session["timestamp"]).seconds > config.session_timeout:
+        session.clear()
 
 api.add_resource(GeocodePost, '/api/geocodepost')
 api.add_resource(QueueStatus, '/api/queue_status')
