@@ -38,7 +38,7 @@ class GeocodePost(Resource):
             t0 = time.time()
             try:
                 data_tuple = tuple(json_data)
-            except Exception as e:
+            except Exception:
                 return "{status: \"BAD_REQUEST\"}", 400
 
             cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE address in %s ORDER BY valid DESC;", (data_tuple,))
@@ -102,14 +102,12 @@ class GeocodeInsert(Resource):
         if data is None:
             return "{status: \"BAD_REQUEST\"}", 400
         
-        # Naive validation of lat/lng
         if data.latitude < -90 or data.latitude > 90 or data.longitude < -180 or data.longitude > 180:
             return "{status: \"BAD_REQUEST\"}", 400
         
         try:
             ipaddress.ip_address(request.remote_addr)
-        except ipaddress.AddressValueError as e:
-            logging.error(e.msg)
+        except ipaddress.AddressValueError:
             return "{status: \"BAD_REQUEST\"}", 400
         
         with db.cursor() as cur:
