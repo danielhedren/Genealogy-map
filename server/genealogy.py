@@ -7,13 +7,14 @@ import logging
 import psycopg2
 from psycopg2.extras import execute_batch
 import time
+import ipaddress
 
 logging.basicConfig(level=logging.DEBUG)
 
 db = psycopg2.connect(config.postgres_connection_string)
 
 with db.cursor() as cur:
-    cur.execute("CREATE TABLE IF NOT EXISTS geocodes (address TEXT, latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(50), PRIMARY KEY (address, source));")
+    cur.execute("CREATE TABLE IF NOT EXISTS geocodes (address VARCHAR(500), latitude DOUBLE PRECISION, longitude DOUBLE PRECISION, valid BOOLEAN, source VARCHAR(75), PRIMARY KEY (address, source));")
     cur.execute("CREATE INDEX IF NOT EXISTS geocodes_la_idx ON geocodes (address);")
     cur.execute("CREATE TABLE IF NOT EXISTS geocodes_pending (id BIGSERIAL PRIMARY KEY, address TEXT UNIQUE, status SMALLINT DEFAULT 0);")
     db.commit()
@@ -22,18 +23,25 @@ app = Flask(__name__)
 api = Api(app)
 
 class GeocodePost(Resource):
-    def get(self):
-        return ""
     def post(self):
         t0 = time.time()
-        json_data = set(request.get_json(force=True))
+        json_data = set(request.get_json(force=True, silent=True))
+
+        if json_data is None:
+            return "{status: \"BAD_REQUEST\"}", 400
+
         logging.debug("Json conversion took " + str(time.time() - t0) + " s")
 
         with db.cursor() as cur:
             locations_list = []
 
             t0 = time.time()
-            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE address in %s ORDER BY valid DESC;", (tuple(json_data),))
+            try:
+                data_tuple = tuple(json_data)
+            except Exception as e:
+                return "{status: \"BAD_REQUEST\"}", 400
+
+            cur.execute("SELECT address, latitude, longitude, valid FROM geocodes WHERE address in %s ORDER BY valid DESC;", (data_tuple,))
             logging.debug("Select took " + str(time.time() - t0) + " s")
 
             t0 = time.time()
@@ -68,7 +76,7 @@ class GeocodePost(Resource):
 
             logging.debug("Rest took " + str(time.time() - t0) + " s")
 
-            return jsonify({"queue_current": queue_current, "queue_target": queue_target, "data": locations_list})
+            return jsonify({"status": "OK", "queue_current": queue_current, "queue_target": queue_target, "data": locations_list}), 202
 
 class QueueStatus(Resource):
     def get(self):
@@ -85,18 +93,31 @@ class QueueStatus(Resource):
             if cur.rowcount == 1:
                 status = "OVER_QUERY_LIMIT"
             
-        return jsonify({"queue_current": queue_current, "status": status})
+        return jsonify({"queue_current": queue_current, "status": status}), 200
 
 class GeocodeInsert(Resource):
     def post(self):
-        data = request.get_json(force=True)
+        data = request.get_json(force=True, silent=True)
+
+        if data is None:
+            return "{status: \"BAD_REQUEST\"}", 400
+        
+        # Naive validation of lat/lng
+        if data.latitude < -90 or data.latitude > 90 or data.longitude < -180 or data.longitude > 180:
+            return "{status: \"BAD_REQUEST\"}", 400
+        
+        try:
+            ipaddress.ip_address(request.remote_addr)
+        except ipaddress.AddressValueError as e:
+            logging.error(e.msg)
+            return "{status: \"BAD_REQUEST\"}", 400
         
         with db.cursor() as cur:
             logging.debug("Inserting")
             cur.execute("INSERT INTO geocodes (address, latitude, longitude, valid, source) VALUES (%(address)s, %(lat)s, %(lng)s, true, %(source)s) ON CONFLICT (address, source) DO UPDATE SET latitude=%(lat)s, longitude=%(lng)s;", {"address":data["address"].lower(), "lat":data["latitude"], "lng":data["longitude"], "source":"remote_addr|" + request.remote_addr})
             db.commit()
 
-        return ""
+        return "{status: \"OK\"}", 201
 
 api.add_resource(GeocodePost, '/api/geocodepost')
 api.add_resource(QueueStatus, '/api/queue_status')
