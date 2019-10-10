@@ -1,7 +1,3 @@
-//gmaps geocoding api key AIzaSyBeD23MFIgJeouDljUSiMq1cBHqR9IfncY
-
-//https://maps.googleapis.com/maps/api/geocode/json?address=Fjärdebäck,+Böja,+Mariestad&key=AIzaSyBeD23MFIgJeouDljUSiMq1cBHqR9IfncY
-
 "use strict";
 
 //--------------------------------------------------
